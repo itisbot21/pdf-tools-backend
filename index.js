@@ -91,7 +91,8 @@ app.post("/pdf-to-image", upload.single("pdf"), async (req, res) => {
     await fs.ensureDir(outputDir);
 
     const outputPrefix = path.join(outputDir, "page");
-    const command = `pdftocairo -jpeg "${pdfPath}" "${outputPrefix}"`;
+    const command = `/usr/bin/pdftocairo -jpeg "${pdfPath}" "${outputPrefix}"`;
+
 
     exec(command, (error) => {
       if (error) {
