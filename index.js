@@ -11,10 +11,6 @@ import rateLimit from "express-rate-limit";
 
 // ---------------- APP SETUP ----------------
 const app = express();
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 60,                 // per IP
-});
 
 app.use(
   cors({
@@ -25,6 +21,11 @@ app.use(
 
 // Allow preflight requests to pass
 app.options("*", cors());
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 60,                 // per IP
+});
 
 // Apply rate limit AFTER CORS, and skip OPTIONS
 app.use((req, res, next) => {
