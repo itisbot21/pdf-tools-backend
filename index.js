@@ -12,26 +12,30 @@ import rateLimit from "express-rate-limit";
 // ---------------- APP SETUP ----------------
 const app = express();
 
-app.use(
-  cors({
-    origin: ["https://pdf.olivez.in"],
-    methods: ["POST", "OPTIONS"],
-  })
-);
-
-// Allow preflight requests to pass
-app.options("/*", cors());
-
+// Rate limiter MUST be defined first
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 60,                 // per IP
 });
+
+// CORS first
+app.use(
+  cors({
+    origin: "https://pdf.olivez.in",
+    methods: ["POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
+
+// Allow preflight requests to pass (Express 5 safe)
+app.options(/.*/, cors());
 
 // Apply rate limit AFTER CORS, and skip OPTIONS
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") return next();
   limiter(req, res, next);
 });
+
 
 // ---------------- MULTER ----------------
 const upload = multer({
