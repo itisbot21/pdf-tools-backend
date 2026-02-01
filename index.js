@@ -22,8 +22,10 @@ const limiter = rateLimit({
 app.use(
   cors({
     origin: "https://pdf.olivez.in",
-    methods: ["POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: "*",
+    exposedHeaders: ["Content-Disposition", "Content-Length"],
+    credentials: false,
   })
 );
 
