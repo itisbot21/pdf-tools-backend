@@ -19,15 +19,11 @@ const limiter = rateLimit({
 });
 
 // CORS first
-app.use(
-  cors({
-    origin: "https://pdf.olivez.in",
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: "*",
-    exposedHeaders: ["Content-Disposition", "Content-Length"],
-    credentials: false,
-  })
-);
+app.use(cors({
+  origin: 'https://pdf.olivez.in', // Only allow requests from your frontend
+  // Alternatively, to allow all origins during development (not recommended for production):
+  // origin: '*',
+}));
 
 // Allow preflight requests to pass (Express 5 safe)
 app.options(/.*/, cors());
