@@ -1,21 +1,15 @@
-FROM node:18-bullseye
+FROM node:18-slim
 
-# Install system dependencies for PDF tools
-RUN apt-get update && apt-get install -y \
-    poppler-utils \
-    ghostscript \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y poppler-utils && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy dependency files first (better caching)
 COPY package*.json ./
+RUN npm install
 
-RUN npm install --production
-
-# Copy the rest of the app
 COPY . .
 
-EXPOSE 3000
-
+EXPOSE 5000
 CMD ["node", "index.js"]

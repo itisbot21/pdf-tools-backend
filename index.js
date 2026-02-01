@@ -7,34 +7,28 @@ import { execFile, execFileSync } from "child_process";
 import path from "path";
 import { PDFDocument } from "pdf-lib";
 import crypto from "crypto";
-import rateLimit from "express-rate-limit";
+import "dotenv/config";
 
 // ---------------- APP SETUP ----------------
 const app = express();
 
-// Rate limiter MUST be defined first
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 60,                 // per IP
-});
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+  : ["https://pdf.olivez.in"];
 
-// CORS first
-app.use(cors({
-  origin: 'https://pdf.olivez.in', // Only allow requests from your frontend
-  // Alternatively, to allow all origins during development (not recommended for production):
-  // origin: '*',
-}));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      callback(new Error("CORS blocked"));
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    exposedHeaders: ["Content-Disposition"],
+  })
+);
 
-// Allow preflight requests to pass (Express 5 safe)
-app.options(/.*/, cors());
-
-// Apply rate limit AFTER CORS, and skip OPTIONS
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") return next();
-  limiter(req, res, next);
-});
-
-
+app.options("*", cors());
 // ---------------- MULTER ----------------
 const upload = multer({
   dest: "uploads/",
@@ -58,7 +52,6 @@ app.get("/", (_, res) => {
 
 // ---------- IMAGE → PDF ----------
 app.post("/image-to-pdf", upload.array("images", 20), async (req, res) => {
-
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: "No images uploaded" });
@@ -66,8 +59,8 @@ app.post("/image-to-pdf", upload.array("images", 20), async (req, res) => {
 
     const pdfDoc = await PDFDocument.create();
 
-    const sortedFiles = req.files.sort(
-      (a, b) => a.originalname.localeCompare(b.originalname)
+    const sortedFiles = req.files.sort((a, b) =>
+      a.originalname.localeCompare(b.originalname)
     );
 
     for (const file of sortedFiles) {
@@ -96,11 +89,11 @@ app.post("/image-to-pdf", upload.array("images", 20), async (req, res) => {
 
     await fs.writeFile(outputPath, pdfBytes);
 
-    res.download(outputPath, "images.pdf", () => {
-      req.files.forEach((file) =>
-        fs.remove(file.path).catch(console.error)
-      );
-      fs.remove(outputPath).catch(console.error);
+    res.download(outputPath, "images.pdf", async () => {
+      for (const file of req.files) {
+        await fs.remove(file.path).catch(console.error);
+      }
+      await fs.remove(outputPath).catch(console.error);
     });
   } catch (err) {
     console.error(err);
@@ -122,7 +115,6 @@ app.post("/pdf-to-image", upload.single("pdf"), async (req, res) => {
     const pdfPath = req.file.path;
 
     let pageCount;
-
     try {
       pageCount = parseInt(
         execFileSync("pdfinfo", [pdfPath])
@@ -132,11 +124,8 @@ app.post("/pdf-to-image", upload.single("pdf"), async (req, res) => {
 
       if (pageCount > 25) {
         await fs.remove(pdfPath);
-        return res
-          .status(400)
-          .json({ error: "PDF too large (max 25 pages)" });
+        return res.status(400).json({ error: "PDF too large (max 25 pages)" });
       }
-
     } catch {
       await fs.remove(pdfPath);
       return res.status(400).json({ error: "Invalid PDF file" });
@@ -144,46 +133,38 @@ app.post("/pdf-to-image", upload.single("pdf"), async (req, res) => {
 
     const jobId = crypto.randomUUID();
     const outputDir = `output/${jobId}`;
-
     await fs.ensureDir(outputDir);
 
     const outputPrefix = path.join(outputDir, "page");
     const format = req.query.format === "jpg" ? "-jpeg" : "-png";
 
-    execFile(
-      "pdftocairo",
-      [format, pdfPath, outputPrefix],
-      (error) => {
-        if (error) {
-          console.error("Poppler error:", error);
-          return res.status(500).json({ error: "Conversion failed" });
-        }
+    execFile("pdftocairo", [format, pdfPath, outputPrefix], (error) => {
+      if (error) {
+        console.error("Poppler error:", error);
+        return res.status(500).json({ error: "Conversion failed" });
+      }
 
-        const zipPath = `${outputDir}.zip`;
-        const output = fs.createWriteStream(zipPath);
-        const archive = archiver("zip");
+      const zipPath = `${outputDir}.zip`;
+      const output = fs.createWriteStream(zipPath);
+      const archive = archiver("zip");
 
-        archive.pipe(output);
-        archive.directory(outputDir, false);
-        archive.finalize();
+      archive.pipe(output);
+      archive.directory(outputDir, false);
+      archive.finalize();
 
-        archive.on("error", (err) => {
-          console.error("Archive error:", err);
-          res.status(500).json({ error: "ZIP creation failed" });
-        });
-
-
-        output.on("close", () => {
-          res.setHeader("Content-Type", "application/zip");
-          res.setHeader("Content-Disposition", "attachment; filename=images.zip");
-          res.download(zipPath);
-
-          // cleanup
-          fs.remove(pdfPath).catch(console.error);
-          fs.remove(outputDir).catch(console.error);
-          fs.remove(zipPath).catch(console.error);
-        });
+      archive.on("error", (err) => {
+        console.error("Archive error:", err);
+        res.status(500).json({ error: "ZIP creation failed" });
       });
+
+      output.on("close", async () => {
+        res.download(zipPath, "images.zip");
+
+        await fs.remove(pdfPath).catch(console.error);
+        await fs.remove(outputDir).catch(console.error);
+        await fs.remove(zipPath).catch(console.error);
+      });
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
