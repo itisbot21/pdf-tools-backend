@@ -28,7 +28,8 @@ app.use(
   })
 );
 
-app.options("*", cors());
+app.options(/.*/, cors());
+
 // ---------------- MULTER ----------------
 const upload = multer({
   dest: "uploads/",
