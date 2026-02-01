@@ -20,7 +20,7 @@ app.use(
 );
 
 // Allow preflight requests to pass
-app.options("*", cors());
+app.options("/*", cors());
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
