@@ -23,6 +23,10 @@ app.use(
   })
 );
 
+// Allow preflight requests to pass
+app.options("*", cors());
+
+// Apply rate limit AFTER CORS, and skip OPTIONS
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") return next();
   limiter(req, res, next);
